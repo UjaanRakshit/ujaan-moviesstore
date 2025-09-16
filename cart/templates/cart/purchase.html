@@ -13,4 +13,105 @@
     </div>
   </div>
 </div>
+
+<!-- Feedback Modal -->
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="feedbackModalLabel">Share Your Experience</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>How was your checkout experience? Your feedback helps us improve GT Movie Store!</p>
+        <form id="feedbackForm">
+          <div class="mb-3">
+            <label for="customerName" class="form-label">Name (Optional)</label>
+            <input type="text" class="form-control" id="customerName" placeholder="Your name (leave empty to remain anonymous)">
+          </div>
+          <div class="mb-3">
+            <label for="feedbackText" class="form-label">Your Feedback *</label>
+            <textarea class="form-control" id="feedbackText" rows="4" placeholder="Share your thoughts about the checkout process..." required></textarea>
+          </div>
+        </form>
+        <div id="feedbackMessage" class="d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="submitFeedback">Submit Feedback</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Show feedback modal after a short delay
+    setTimeout(function() {
+        var feedbackModal = new bootstrap.Modal(document.getElementById('feedbackModal'));
+        feedbackModal.show();
+    }, 1000);
+
+    // Handle feedback submission
+    document.getElementById('submitFeedback').addEventListener('click', function() {
+        const name = document.getElementById('customerName').value.trim();
+        const feedbackText = document.getElementById('feedbackText').value.trim();
+        const messageDiv = document.getElementById('feedbackMessage');
+        
+        if (!feedbackText) {
+            messageDiv.className = 'alert alert-danger';
+            messageDiv.textContent = 'Please provide your feedback before submitting.';
+            messageDiv.classList.remove('d-none');
+            return;
+        }
+
+        // Disable submit button
+        this.disabled = true;
+        this.textContent = 'Submitting...';
+
+        // Submit feedback via AJAX
+        fetch('{% url "submit_feedback" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: name,
+                feedback_text: feedbackText,
+                order_id: {{ template_data.order_id }}
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                messageDiv.className = 'alert alert-success';
+                messageDiv.textContent = data.message;
+                messageDiv.classList.remove('d-none');
+                
+                // Hide modal after 2 seconds
+                setTimeout(function() {
+                    bootstrap.Modal.getInstance(document.getElementById('feedbackModal')).hide();
+                }, 2000);
+            } else {
+                messageDiv.className = 'alert alert-danger';
+                messageDiv.textContent = data.message;
+                messageDiv.classList.remove('d-none');
+                
+                // Re-enable submit button
+                document.getElementById('submitFeedback').disabled = false;
+                document.getElementById('submitFeedback').textContent = 'Submit Feedback';
+            }
+        })
+        .catch(error => {
+            messageDiv.className = 'alert alert-danger';
+            messageDiv.textContent = 'An error occurred. Please try again.';
+            messageDiv.classList.remove('d-none');
+            
+            // Re-enable submit button
+            this.disabled = false;
+            this.textContent = 'Submit Feedback';
+        });
+    });
+});
+</script>
 {% endblock content %}

@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="p-3">
+  <div class="container">
+    <div class="row mt-3">
+      <div class="col mx-auto mb-3">
+        <h2>Customer Feedback</h2>
+        <hr />
+        
+        {% if template_data.feedbacks %}
+          <div class="row">
+            {% for feedback in template_data.feedbacks %}
+              <div class="col-md-6 mb-4">
+                <div class="card">
+                  <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                      {% if feedback.name %}
+                        {{ feedback.name }}
+                      {% else %}
+                        Anonymous
+                      {% endif %}
+                      <small class="float-end">{{ feedback.date_created|date:"M d, Y" }}</small>
+                    </h6>
+                    <p class="card-text">{{ feedback.feedback_text }}</p>
+                    {% if feedback.order %}
+                      <small class="text-muted">Order #{{ feedback.order.id }}</small>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="alert alert-info">
+            <p>No feedback has been submitted yet.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock content %}
