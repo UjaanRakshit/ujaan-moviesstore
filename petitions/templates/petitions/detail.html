@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'petitions.index' %}">Petitions</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ template_data.petition.movie_title }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0">{{ template_data.petition.movie_title }}</h3>
+                    <small class="text-muted">{{ template_data.petition.title }}</small>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        {% if template_data.petition.movie_director %}
+                            <div class="col-md-6">
+                                <strong>Director:</strong> {{ template_data.petition.movie_director }}
+                            </div>
+                        {% endif %}
+                        {% if template_data.petition.movie_year %}
+                            <div class="col-md-6">
+                                <strong>Year:</strong> {{ template_data.petition.movie_year }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if template_data.petition.movie_genre %}
+                        <div class="mb-3">
+                            <strong>Genre:</strong> 
+                            <span class="badge bg-secondary">{{ template_data.petition.movie_genre }}</span>
+                        </div>
+                    {% endif %}
+                    
+                    {% if template_data.petition.movie_description %}
+                        <div class="mb-3">
+                            <strong>Movie Description:</strong>
+                            <p class="mt-2">{{ template_data.petition.movie_description }}</p>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <strong>Why this movie should be added:</strong>
+                        <p class="mt-2">{{ template_data.petition.description }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <small class="text-muted">
+                            Created by <strong>{{ template_data.petition.created_by.username }}</strong> 
+                            on {{ template_data.petition.created_at|date:"F d, Y \a\t g:i A" }}
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Voting Results</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <div class="row">
+                            <div class="col-4">
+                                <div class="p-3 bg-success text-white rounded">
+                                    <h4 class="mb-0" id="yes-count">{{ template_data.yes_votes }}</h4>
+                                    <small>Yes</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-danger text-white rounded">
+                                    <h4 class="mb-0" id="no-count">{{ template_data.no_votes }}</h4>
+                                    <small>No</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-secondary text-white rounded">
+                                    <h4 class="mb-0" id="total-count">{{ template_data.total_votes }}</h4>
+                                    <small>Total</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if user.is_authenticated %}
+                        <div class="voting-section">
+                            {% if template_data.user_vote %}
+                                <div class="alert alert-info text-center">
+                                    <i class="fas fa-vote-yea"></i>
+                                    You voted: <strong>{{ template_data.user_vote|upper }}</strong>
+                                    <br><small>You can change your vote below</small>
+                                </div>
+                            {% endif %}
+                            
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-success vote-btn" data-vote="yes" 
+                                        {% if template_data.user_vote == 'yes' %}disabled{% endif %}>
+                                    <i class="fas fa-thumbs-up"></i> Vote Yes
+                                </button>
+                                <button class="btn btn-danger vote-btn" data-vote="no"
+                                        {% if template_data.user_vote == 'no' %}disabled{% endif %}>
+                                    <i class="fas fa-thumbs-down"></i> Vote No
+                                </button>
+                            </div>
+                            
+                            <div id="vote-message" class="mt-3" style="display: none;"></div>
+                        </div>
+                    {% else %}
+                        <div class="text-center">
+                            <p class="text-muted">Please login to vote on this petition</p>
+                            <a href="{% url 'accounts.login' %}" class="btn btn-primary">Login to Vote</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% if template_data.total_votes > 0 %}
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Vote Progress</h6>
+                    </div>
+                    <div class="card-body">
+                        {% with yes_percentage=template_data.yes_votes|floatformat:0 total=template_data.total_votes %}
+                            {% if total > 0 %}
+                                {% widthratio template_data.yes_votes template_data.total_votes 100 as yes_percent %}
+                                {% widthratio template_data.no_votes template_data.total_votes 100 as no_percent %}
+                                
+                                <div class="progress mb-2" style="height: 20px;">
+                                    <div class="progress-bar bg-success" role="progressbar" 
+                                         style="width: {{ yes_percent }}%" aria-valuenow="{{ yes_percent }}" 
+                                         aria-valuemin="0" aria-valuemax="100">
+                                        {{ yes_percent }}%
+                                    </div>
+                                </div>
+                                
+                                <small class="text-muted">
+                                    {{ yes_percent }}% in favor ({{ template_data.yes_votes }} out of {{ template_data.total_votes }} votes)
+                                </small>
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const voteButtons = document.querySelectorAll('.vote-btn');
+    const messageDiv = document.getElementById('vote-message');
+    
+    voteButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const voteType = this.dataset.vote;
+            const petitionId = {{ template_data.petition.id }};
+            
+            // Disable all buttons during voting
+            voteButtons.forEach(btn => btn.disabled = true);
+            
+            fetch(`/petitions/${petitionId}/vote/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                },
+                body: JSON.stringify({
+                    vote_type: voteType
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update vote counts
+                    document.getElementById('yes-count').textContent = data.yes_votes;
+                    document.getElementById('no-count').textContent = data.no_votes;
+                    document.getElementById('total-count').textContent = data.total_votes;
+                    
+                    // Show success message
+                    messageDiv.className = 'alert alert-success';
+                    messageDiv.textContent = data.message;
+                    messageDiv.style.display = 'block';
+                    
+                    // Update button states
+                    voteButtons.forEach(btn => {
+                        btn.disabled = false;
+                        if (btn.dataset.vote === data.user_vote) {
+                            btn.disabled = true;
+                        }
+                    });
+                    
+                    // Hide message after 3 seconds
+                    setTimeout(() => {
+                        messageDiv.style.display = 'none';
+                    }, 3000);
+                } else {
+                    // Show error message
+                    messageDiv.className = 'alert alert-danger';
+                    messageDiv.textContent = data.message;
+                    messageDiv.style.display = 'block';
+                    
+                    // Re-enable buttons
+                    voteButtons.forEach(btn => btn.disabled = false);
+                }
+            })
+            .catch(error => {
+                messageDiv.className = 'alert alert-danger';
+                messageDiv.textContent = 'An error occurred while voting. Please try again.';
+                messageDiv.style.display = 'block';
+                
+                // Re-enable buttons
+                voteButtons.forEach(btn => btn.disabled = false);
+            });
+        });
+    });
+});
+</script>
+{% endblock content %}
