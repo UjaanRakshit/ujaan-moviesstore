@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404, redirect
 from movies.models import Movie
-from .utils import calculate_cart_total
+from .utils import calculate_cart_total, derive_region_code
 from .models import Order, Item, Feedback
 from .forms import FeedbackForm
 from django.contrib.auth.decorators import login_required
@@ -42,6 +42,8 @@ def purchase(request):
     order = Order()
     order.user = request.user
     order.total = cart_total
+    # Tag order with best-effort region (query -> session -> Accept-Language)
+    order.region_code = derive_region_code(request)
     order.save()
     for movie in movies_in_cart:
         item = Item()
