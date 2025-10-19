@@ -9,6 +9,9 @@
         <p>Congratulations, purchase completed. Order
           number is: <b>#{{ template_data.order_id }}</b>
         </p>
+        {% if request.user.is_authenticated %}
+        <p class="text-muted">Region tagged: <span class="badge text-bg-secondary">{{ request.user.order_set.last.region_code|default:'N/A' }}</span></p>
+        {% endif %}
       </div>
     </div>
   </div>
