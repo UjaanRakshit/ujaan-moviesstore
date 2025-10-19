@@ -34,9 +34,19 @@
     </div>
     <div class="row">
       <div class="text-end">
+        {% if request.session.preferred_region_code %}
+        <div class="alert alert-info text-start" role="alert">
+          Purchases will be tagged to region: <strong>{{ request.session.preferred_region_code }}</strong>.
+          <a href="{% url 'home.local_popularity_map' %}" class="alert-link">Change</a>
+        </div>
+        {% else %}
+        <div class="alert alert-warning text-start" role="alert">
+          Purchases are not tagged to a region yet. Click a country on the <a href="{% url 'home.local_popularity_map' %}" class="alert-link">Local Popularity Map</a> first.
+        </div>
+        {% endif %}
         <a class="btn btn-outline-secondary mb-2"><b>Total to pay:</b> ${{ template_data.cart_total }}</a>
         {% if template_data.movies_in_cart|length > 0 %}
-        <a href="{% url 'cart.purchase' %}"
+        <a href="{% url 'cart.purchase' %}{% if request.session.preferred_region_code %}?region={{ request.session.preferred_region_code }}{% endif %}"
           class="btn bg-dark text-white mb-2">Purchase
         </a>
         <a href="{% url 'cart.clear' %}">
