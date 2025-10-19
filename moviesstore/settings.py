@@ -11,7 +11,19 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 import os
 from pathlib import Path
-from decouple import config
+try:
+    from decouple import config  # type: ignore
+except Exception:
+    def config(key, default=None, cast=None):
+        val = os.environ.get(key, default)
+        if cast is bool:
+            if isinstance(val, str):
+                return val.lower() in ("1", "true", "yes", "on")
+            return bool(val)
+        try:
+            return cast(val) if cast else val
+        except Exception:
+            return val
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

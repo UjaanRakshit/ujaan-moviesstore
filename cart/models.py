@@ -23,8 +23,11 @@ class Order(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(User,
         on_delete=models.CASCADE)
+    # ISO A3 country code for where the purchase occurred (e.g., 'USA', 'CAN')
+    region_code = models.CharField(max_length=3, null=True, blank=True, db_index=True)
     def __str__(self):
-        return str(self.id) + ' - ' + self.user.username
+        suffix = f" ({self.region_code})" if self.region_code else ""
+        return str(self.id) + ' - ' + self.user.username + suffix
 class Item(models.Model):
     id = models.AutoField(primary_key=True)
     price = models.IntegerField()

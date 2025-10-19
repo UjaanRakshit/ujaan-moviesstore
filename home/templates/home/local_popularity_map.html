@@ -17,21 +17,62 @@
                     <div id="map" style="height: 600px; width: 100%;"></div>
                 </div>
             </div>
-            <div class="alert alert-info mt-3" id="location-status">
-                <i class="fas fa-info-circle"></i> Click the button below to center the map on your current location.
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                <div class="alert alert-info flex-grow-1 mb-0" id="location-status">
+                    <i class="fas fa-info-circle"></i> Click the button below to center the map on your current location.
+                </div>
+                {% if template_data.preferred_region %}
+                <span class="badge text-bg-secondary ms-2">Current Region: {{ template_data.preferred_region }}</span>
+                {% endif %}
             </div>
-            <button id="locate-btn" class="btn btn-primary mt-2">
-                <i class="fas fa-location-arrow"></i> Use My Location
-            </button>
+            <div class="mt-2 d-flex gap-2">
+                <button id="locate-btn" class="btn btn-primary">
+                    <i class="fas fa-location-arrow"></i> Use My Location
+                </button>
+                <button id="refresh-popularity" class="btn btn-outline-secondary">
+                    <i class="fas fa-rotate"></i> Refresh Popularity
+                </button>
+                <button id="set-usa" class="btn btn-outline-primary">
+                    <i class="fas fa-flag-usa"></i> Set Region: USA
+                </button>
+            </div>
         </div>
     </div>
 </div>
 
+{# Safely embed initial popularity as JSON #}
+{{ country_popularity|json_script:"country-popularity-data" }}
+
 <script>
-    // Server-provided country popularity (fallback to empty object)
-    window.COUNTRY_POPULARITY = {{ country_popularity|default:'{}'|safe }};
+    // Server-provided country popularity (initial seed; API will update)
+    window.COUNTRY_POPULARITY = (function(){
+        try { return JSON.parse(document.getElementById('country-popularity-data').textContent) || {}; }
+        catch(e){ return {}; }
+    })();
     let map;
     let userMarker;
+    let infoWindow;
+    let lastClickedRegion = null;
+    let popMarkers = [];
+
+    // Country centroids for markers (supports ISO3 and ISO2 keys)
+    const COUNTRY_CENTROIDS = {
+        'USA': { lat: 37.0902, lng: -95.7129 }, 'US': { lat: 37.0902, lng: -95.7129 },
+        'CAN': { lat: 56.1304, lng: -106.3468 }, 'CA': { lat: 56.1304, lng: -106.3468 },
+        'GBR': { lat: 55.3781, lng: -3.4360 }, 'UK': { lat: 55.3781, lng: -3.4360 }, 'GB': { lat: 55.3781, lng: -3.4360 },
+        'AUS': { lat: -25.2744, lng: 133.7751 }, 'AU': { lat: -25.2744, lng: 133.7751 },
+        'IND': { lat: 20.5937, lng: 78.9629 }, 'IN': { lat: 20.5937, lng: 78.9629 },
+        'DEU': { lat: 51.1657, lng: 10.4515 }, 'DE': { lat: 51.1657, lng: 10.4515 },
+        'FRA': { lat: 46.2276, lng: 2.2137 }, 'FR': { lat: 46.2276, lng: 2.2137 },
+        'BRA': { lat: -14.2350, lng: -51.9253 }, 'BR': { lat: -14.2350, lng: -51.9253 },
+        'JPN': { lat: 36.2048, lng: 138.2529 }, 'JP': { lat: 36.2048, lng: 138.2529 },
+        'CHN': { lat: 35.8617, lng: 104.1954 }, 'CN': { lat: 35.8617, lng: 104.1954 },
+        'MEX': { lat: 23.6345, lng: -102.5528 }, 'MX': { lat: 23.6345, lng: -102.5528 },
+        'ESP': { lat: 40.4637, lng: -3.7492 }, 'ES': { lat: 40.4637, lng: -3.7492 },
+        'ITA': { lat: 41.8719, lng: 12.5674 }, 'IT': { lat: 41.8719, lng: 12.5674 },
+        'KOR': { lat: 36.5, lng: 128 }, 'KR': { lat: 36.5, lng: 128 },
+        'RUS': { lat: 61.5240, lng: 105.3188 }, 'RU': { lat: 61.5240, lng: 105.3188 }
+    };
 
     function getColor(d) {
         return d > 100 ? '#800026' :
@@ -44,10 +85,14 @@
     }
 
     function styleFeature(feature) {
-        const iso3 = feature.getProperty && (feature.getProperty('ISO_A3') || feature.getProperty('ISO_A2') || feature.getProperty('iso_a3') || feature.getProperty('adm0_a3'));
+        const iso3 = feature.getProperty && (feature.getProperty('ISO_A3') || feature.getProperty('iso_a3') || feature.getProperty('adm0_a3'));
+        const iso2 = feature.getProperty && (feature.getProperty('ISO_A2') || feature.getProperty('iso_a2'));
         const name = feature.getProperty && (feature.getProperty('ADMIN') || feature.getProperty('NAME') || feature.getProperty('name'));
-        const key = iso3 || name;
-        const value = window.COUNTRY_POPULARITY && window.COUNTRY_POPULARITY[key] ? window.COUNTRY_POPULARITY[key] : 0;
+        const pop = window.COUNTRY_POPULARITY || {};
+        const k3 = (iso3 || '').toString().toUpperCase();
+        const k2 = (iso2 || '').toString().toUpperCase();
+        const kn = (name || '').toString().toUpperCase();
+        const value = (pop[k3] || pop[k2] || pop[kn] || 0);
 
         return {
             fillColor: getColor(value),
@@ -67,8 +112,7 @@
             streetViewControl: true,
             fullscreenControl: true,
         });
-
-        const infoWindow = new google.maps.InfoWindow();
+        infoWindow = new google.maps.InfoWindow();
 
         // Load GeoJSON of countries
         const geoJsonUrl = 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson';
@@ -84,9 +128,13 @@
                 map.data.addListener('mouseover', function(event) {
                     map.data.overrideStyle(event.feature, { strokeWeight: 2, fillOpacity: 0.85 });
                     const name = event.feature.getProperty('ADMIN') || event.feature.getProperty('NAME') || event.feature.getProperty('name');
-                    const iso3 = event.feature.getProperty('ISO_A3') || event.feature.getProperty('iso_a3') || event.feature.getProperty('ISO_A2');
-                    const key = iso3 || name;
-                    const value = window.COUNTRY_POPULARITY && window.COUNTRY_POPULARITY[key] ? window.COUNTRY_POPULARITY[key] : 0;
+                    const iso3 = event.feature.getProperty('ISO_A3') || event.feature.getProperty('ADM0_A3') || event.feature.getProperty('iso_a3') || event.feature.getProperty('adm0_a3');
+                    const iso2 = event.feature.getProperty('ISO_A2') || event.feature.getProperty('iso_a2');
+                    const pop = window.COUNTRY_POPULARITY || {};
+                    const k3 = (iso3 || '').toString().toUpperCase();
+                    const k2 = (iso2 || '').toString().toUpperCase();
+                    const kn = (name || '').toString().toUpperCase();
+                    const value = (pop[k3] || pop[k2] || pop[kn] || 0);
                     infoWindow.setContent(`<div style="min-width:140px;"><strong>${name || 'Unknown'}</strong><br>Popularity: <strong>${value}</strong></div>`);
                     if (event.latLng) { infoWindow.setPosition(event.latLng); infoWindow.open(map); }
                 });
@@ -96,12 +144,39 @@
                     infoWindow.close();
                 });
 
-                map.data.addListener('click', function(event) {
+                map.data.addListener('click', async function(event) {
                     const name = event.feature.getProperty('ADMIN') || event.feature.getProperty('NAME') || event.feature.getProperty('name');
-                    const iso3 = event.feature.getProperty('ISO_A3') || event.feature.getProperty('iso_a3') || event.feature.getProperty('ISO_A2');
-                    const key = iso3 || name;
-                    const value = window.COUNTRY_POPULARITY && window.COUNTRY_POPULARITY[key] ? window.COUNTRY_POPULARITY[key] : 0;
-                    infoWindow.setContent(`<div style="min-width:200px;"><h6 style="margin:0">${name || 'Unknown'}</h6><p style="margin:0.25rem 0 0 0">Popularity: <strong>${value}</strong></p></div>`);
+                    const iso3Raw = event.feature.getProperty('ISO_A3') || event.feature.getProperty('ADM0_A3') || event.feature.getProperty('iso_a3') || event.feature.getProperty('adm0_a3');
+                    const iso2Raw = event.feature.getProperty('ISO_A2') || event.feature.getProperty('iso_a2');
+                    const pop = window.COUNTRY_POPULARITY || {};
+                    const k3 = (iso3Raw || '').toString().toUpperCase();
+                    const k2 = (iso2Raw || '').toString().toUpperCase();
+                    const kn = (name || '').toString().toUpperCase();
+                    const value = (pop[k3] || pop[k2] || pop[kn] || 0);
+                    const resolvedCode = k3 || k2 || kn;
+                    lastClickedRegion = resolvedCode;
+
+                    // Fetch top movies for this region
+                    let topHtml = '<em>No purchases yet</em>';
+                    try {
+                        const resp = await fetch(`/api/region/${resolvedCode}/top?limit=5`);
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            if (data.top && data.top.length) {
+                                topHtml = '<ol style="margin:0;padding-left:1.2rem">' + data.top.map(t => `<li>${t.title} <span style="color:#666">(${t.count})</span></li>`).join('') + '</ol>';
+                            }
+                        }
+                    } catch(e) { /* ignore */ }
+
+                    // Set preferred region in session for future purchases
+                    try {
+                        // Prefer ISO3; fall back to ISO2; avoid sending long names
+                        const regionCode = k3 || k2 || '';
+                        const res = await fetch('/api/set-region', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ region_code: regionCode }) });
+                        if (!res.ok) console.warn('Failed to set session region');
+                    } catch(e) { console.warn('Error setting session region', e); }
+
+                    infoWindow.setContent(`<div style="min-width:260px;max-width:320px;"><h6 style="margin:0 0 6px 0">${name || 'Unknown'}${resolvedCode ? ' ('+resolvedCode+')' : ''}</h6><div>Popularity: <strong>${value}</strong></div><div style="margin-top:6px;"><strong>Top Movies</strong>${topHtml?('<div style="margin-top:4px;">'+topHtml+'</div>'):''}</div></div>`);
                     if (event.latLng) { infoWindow.setPosition(event.latLng); infoWindow.open(map); }
                 });
 
@@ -125,10 +200,98 @@
             })
             .catch(err => console.error('Failed to load GeoJSON:', err));
 
+        // Fetch current popularity from API and recolor
+        refreshPopularity();
+
         // locate button
         document.getElementById('locate-btn').addEventListener('click', getUserLocation);
+        document.getElementById('refresh-popularity').addEventListener('click', async () => {
+            const btn = document.getElementById('refresh-popularity');
+            const prev = btn.innerHTML;
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+            try { await refreshPopularity(); } finally { btn.disabled = false; btn.innerHTML = prev; }
+        });
+        document.getElementById('set-usa').addEventListener('click', async () => {
+            const btn = document.getElementById('set-usa');
+            const prev = btn.innerHTML;
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Setting...';
+            try {
+                const res = await fetch('/api/set-region', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ region_code: 'USA' }) });
+                if (!res.ok) throw new Error('Failed to set region');
+                const data = await res.json();
+                const badge = document.querySelector('.badge.text-bg-secondary');
+                if (badge) { badge.textContent = 'Current Region: ' + (data.region_code || 'USA'); }
+                await refreshPopularity();
+            } catch (e) { console.warn(e); }
+            finally { btn.disabled = false; btn.innerHTML = prev; }
+        });
         // try to get user location on load (optional; can be commented out)
         // getUserLocation();
+    }
+
+    async function refreshPopularity(){
+        try {
+            const resp = await fetch('/api/region-popularity');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const regions = data.regions || {};
+            // normalize keys to uppercase to match ISO2/ISO3 lookups
+            const normalized = {};
+            Object.keys(regions).forEach(k => { if (k) normalized[k.toString().toUpperCase()] = regions[k]; });
+            window.COUNTRY_POPULARITY = normalized;
+                if (Object.keys(normalized).length) {
+                    console.debug('Region popularity loaded:', normalized);
+                } else {
+                    console.debug('Region popularity is empty');
+                }
+            // restyle features
+            map.data.setStyle(styleFeature);
+            // update centroid markers as an explicit overlay
+            updatePopularityMarkers(normalized);
+        } catch(e) { /* ignore */ }
+    }
+
+    function clearPopularityMarkers(){
+        popMarkers.forEach(m => m.setMap(null));
+        popMarkers = [];
+    }
+
+    function updatePopularityMarkers(pop){
+        clearPopularityMarkers();
+        const entries = Object.entries(pop).filter(([code,count]) => (COUNTRY_CENTROIDS[code] && count > 0));
+        for (const [code, count] of entries){
+            const pos = COUNTRY_CENTROIDS[code];
+            const marker = new google.maps.Marker({
+                position: pos,
+                map: map,
+                label: {
+                    text: String(count),
+                    color: '#fff',
+                    fontWeight: '700'
+                },
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    fillColor: '#d9534f',
+                    fillOpacity: 0.9,
+                    strokeColor: '#a94442',
+                    strokeWeight: 1,
+                    scale: Math.max(10, Math.min(30, 8 + Math.log(count + 1) * 6))
+                },
+                title: code + ': ' + count
+            });
+            marker.addListener('click', async () => {
+                try {
+                    const resp = await fetch(`/api/region/${code}/top?limit=5`);
+                    const data = await resp.json();
+                    const topHtml = (data.top && data.top.length)
+                        ? '<ol style="margin:0;padding-left:1.2rem">' + data.top.map(t => `<li>${t.title} <span style="color:#666">(${t.count})</span></li>`).join('') + '</ol>'
+                        : '<em>No purchases yet</em>';
+                    infoWindow.setContent(`<div style="min-width:220px;max-width:300px;"><h6 style="margin:0 0 6px 0">${code}</h6><div>Popularity: <strong>${count}</strong></div><div style=\"margin-top:6px;\"><strong>Top Movies</strong><div style=\"margin-top:4px;\">${topHtml}</div></div></div>`);
+                    infoWindow.open(map, marker);
+                } catch (e) { /* ignore */ }
+            });
+            popMarkers.push(marker);
+        }
     }
 
     // Get user's current location (same as before)
