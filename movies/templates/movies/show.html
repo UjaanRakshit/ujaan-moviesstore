@@ -7,6 +7,30 @@
       <div class="col-md-6 mx-auto mb-3">
         <h2>{{ template_data.movie.name }}</h2>
         <hr />
+
+        <!-- Average Rating Display -->
+        <div class="mb-3">
+          <div class="d-flex align-items-center">
+            <div class="stars-display me-2">
+              {% for i in "12345" %}
+                {% if forloop.counter <= template_data.average_rating %}
+                  <i class="fas fa-star text-warning"></i>
+                {% else %}
+                  <i class="far fa-star text-warning"></i>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <span class="text-muted">
+              <b>{{ template_data.average_rating }}</b>
+              {% if template_data.rating_count == 1 %}
+                ({{ template_data.rating_count }} rating)
+              {% else %}
+                ({{ template_data.rating_count }} ratings)
+              {% endif %}
+            </span>
+          </div>
+        </div>
+
         <p><b>Description:</b> {{ template_data.movie.description }}</p>
         <p><b>Price:</b> ${{ template_data.movie.price }}</p>
         <p class="card-text">
@@ -37,6 +61,7 @@
             <h6 class="card-subtitle mb-2 text-muted">
               {{ review.date }}
             </h6>
+
             <p class="card-text">{{ review.comment }}</p>
             {% if user.is_authenticated and user == review.user %}
             <a class="btn btn-primary"
@@ -61,6 +86,7 @@
                   <b class="text-start">Create a review</b><br /><br />
                   <form method="POST" action="{% url 'movies.create_review' id=template_data.movie.id %}">
                     {% csrf_token %}
+
                     <p>
                       <label for="comment">Comment:</label>
                       <textarea name="comment" required class="form-control" id="comment"></textarea>
@@ -81,8 +107,97 @@
       </div>
       <div class="col-md-6 mx-auto mb-3 text-center">
         <img src="{{ template_data.movie.image.url }}" class="rounded img-card-400" />
+
+        <!-- Rating Form under poster -->
+        {% if user.is_authenticated %}
+        <div class="card shadow p-3 mt-4 rounded">
+          <div class="card-body">
+            <h5 class="text-center mb-3">
+              {% if template_data.user_rating %}
+                Your Rating: {{ template_data.user_rating.rating }} <i class="fas fa-star text-warning"></i>
+              {% else %}
+                Rate this movie
+              {% endif %}
+            </h5>
+            <form method="POST" action="{% url 'movies.submit_rating' id=template_data.movie.id %}">
+              {% csrf_token %}
+              <div class="star-rating-center mb-3">
+                <input type="radio" id="star5" name="rating" value="5"
+                  {% if template_data.user_rating and template_data.user_rating.rating == 5 %}checked{% endif %} required />
+                <label for="star5" title="5 stars"><i class="fas fa-star"></i></label>
+
+                <input type="radio" id="star4" name="rating" value="4"
+                  {% if template_data.user_rating and template_data.user_rating.rating == 4 %}checked{% endif %} required />
+                <label for="star4" title="4 stars"><i class="fas fa-star"></i></label>
+
+                <input type="radio" id="star3" name="rating" value="3"
+                  {% if template_data.user_rating and template_data.user_rating.rating == 3 %}checked{% endif %} required />
+                <label for="star3" title="3 stars"><i class="fas fa-star"></i></label>
+
+                <input type="radio" id="star2" name="rating" value="2"
+                  {% if template_data.user_rating and template_data.user_rating.rating == 2 %}checked{% endif %} required />
+                <label for="star2" title="2 stars"><i class="fas fa-star"></i></label>
+
+                <input type="radio" id="star1" name="rating" value="1"
+                  {% if template_data.user_rating and template_data.user_rating.rating == 1 %}checked{% endif %} required />
+                <label for="star1" title="1 star"><i class="fas fa-star"></i></label>
+              </div>
+              <div class="text-center">
+                <button type="submit" class="btn bg-dark text-white">
+                  {% if template_data.user_rating %}Update Rating{% else %}Submit Rating{% endif %}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
 </div>
+
+<style>
+.star-rating, .star-rating-center {
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 5px;
+}
+
+.star-rating {
+  justify-content: flex-end;
+}
+
+.star-rating-center {
+  justify-content: center;
+}
+
+.star-rating input[type="radio"],
+.star-rating-center input[type="radio"] {
+  display: none;
+}
+
+.star-rating label,
+.star-rating-center label {
+  cursor: pointer;
+  font-size: 2rem;
+  color: #ddd;
+  transition: color 0.2s;
+}
+
+.star-rating label:hover,
+.star-rating label:hover ~ label,
+.star-rating-center label:hover,
+.star-rating-center label:hover ~ label {
+  color: #ffc107;
+}
+
+.star-rating input[type="radio"]:checked ~ label,
+.star-rating-center input[type="radio"]:checked ~ label {
+  color: #ffc107;
+}
+
+.stars-display {
+  font-size: 1.2rem;
+}
+</style>
 {% endblock content %}
